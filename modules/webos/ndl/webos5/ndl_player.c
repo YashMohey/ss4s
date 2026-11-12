@@ -328,6 +328,8 @@ static int FeedOnePrimePacket(SS4S_PlayerContext *context, int64_t pts_ms) {
             numChannels = 1;
         } else if (strncmp(context->mediaInfo.audio.pcm.channelMode, "6-channel", 10) == 0) {
             numChannels = 6;
+        } else if (strncmp(context->mediaInfo.audio.pcm.channelMode, "8-channel", 10) == 0) {
+            numChannels = 8;
         }
         size_t size = (size_t) numChannels * sizeof(unsigned short);
         int rc = NDL_DirectAudioPlay(empty_buf, size, pts_ms);

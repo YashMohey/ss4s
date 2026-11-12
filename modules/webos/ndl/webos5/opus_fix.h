@@ -9,7 +9,7 @@ typedef struct OpusConfig {
     uint8_t channels;
     uint8_t streamCount;
     uint8_t coupledCount;
-    uint8_t mapping[6];
+    uint8_t mapping[8];
 } OpusConfig;
 
 SS4S_NDLOpusFix *SS4S_NDLOpusFixCreate(const OpusConfig *config);

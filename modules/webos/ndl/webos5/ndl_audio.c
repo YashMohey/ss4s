@@ -33,15 +33,17 @@ static bool GetCapabilities(SS4S_AudioCapabilities *capabilities, SS4S_AudioCode
     }
     capabilities->codecs = SS4S_AUDIO_PCM_S16LE | opusCodec;
     /*
-     * Don't check for system settings to determine the number of channels, just provide 6 channels.
+     * Don't check for system settings to determine the number of channels.
      * webOS should be able to down-mix that anyway.
+     * 8 channels (7.1) is experimental: whether NDL takes it, and in which speaker order, is
+     * only known per device.
      */
-    capabilities->maxChannels = 6;
+    capabilities->maxChannels = 8;
     return true;
 }
 
 static SS4S_AudioCodec GetPreferredCodecs(const SS4S_AudioInfo *info) {
-    if (info->numOfChannels == 6) {
+    if (info->numOfChannels == 6 || info->numOfChannels == 8) {
         return SS4S_AUDIO_OPUS;
     }
     return SS4S_AUDIO_PCM_S16LE;
@@ -94,6 +96,10 @@ static SS4S_AudioOpenResult OpenAudio(const SS4S_AudioInfo *info, SS4S_AudioInst
                     SS4S_NDL_webOS5_Log(SS4S_LogLevelWarn, "NDL", "6-channel PCM is not supported, "
                                                                   "falling back to stereo");
                 }
+            } else if (info->numOfChannels == 8) {
+                /* Not in any known NDL header: a guess by analogy with "6-channel". */
+                mode = "8-channel";
+                SS4S_NDL_webOS5_Log(SS4S_LogLevelInfo, "NDL", "Trying 8-channel PCM (experimental)");
             }
             NDL_DIRECTAUDIO_PCM_INFO_T pcmInfo = {
                     .type = NDL_AUDIO_TYPE_PCM,
@@ -151,6 +157,15 @@ static SS4S_AudioOpenResult OpenAudio(const SS4S_AudioInfo *info, SS4S_AudioInst
                     }
                 } else if (opusConfig.channels == 6) {
                     SS4S_NDL_webOS5_Log(SS4S_LogLevelInfo, "NDL", "Opus 5.1 passthrough (no re-encode)");
+                } else if (opusConfig.channels == 8) {
+                    SS4S_NDL_webOS5_Log(SS4S_LogLevelInfo, "NDL",
+                                        "Opus 7.1 passthrough (experimental) streams=%d coupled=%d "
+                                        "mapping=[%u,%u,%u,%u,%u,%u,%u,%u] frame=%uus",
+                                        opusConfig.streamCount, opusConfig.coupledCount,
+                                        opusConfig.mapping[0], opusConfig.mapping[1], opusConfig.mapping[2],
+                                        opusConfig.mapping[3], opusConfig.mapping[4], opusConfig.mapping[5],
+                                        opusConfig.mapping[6], opusConfig.mapping[7],
+                                        (unsigned) frameDurationUs);
                 }
             }
             context->mediaInfo.audio.opus = opusInfo;
@@ -321,9 +336,9 @@ bool ParseOpusConfig(const unsigned char *codecData, size_t codecDataLen, OpusCo
     config->streamCount = codecData[19];
     config->coupledCount = codecData[20];
     if (config->channels > sizeof(config->mapping)) {
-        // We can only represent up to sizeof(mapping) channels (5.1 layout).
-        // Anything wider (e.g. 7.1 surround = 8 channels) would overflow the
-        // fixed-size mapping array on the memcpy below.
+        // We can only represent up to sizeof(mapping) channels (7.1 layout).
+        // Anything wider would overflow the fixed-size mapping array on the
+        // memcpy below.
         return false;
     }
     if ((int) codecDataLen >= 21 + config->channels) {
